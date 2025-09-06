@@ -29,75 +29,98 @@ Analyses:
       └─ Optional regression: rat arrivals → bat landings/food availability
       
 '''
-
 # investigation_b.py
 # Seasonal variation in bat and rat behavior (Investigation B)
 # Using dataset1.csv and dataset2.csv
 
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
 warnings.filterwarnings('ignore')
 
+# -------------------------
+# Configuration
+# -------------------------
+DATASET1_PATH = 'dataset1.csv'
+DATASET2_PATH = 'dataset2.csv'
+FIG_DIR = 'invfind2'
+os.makedirs(FIG_DIR, exist_ok=True)
 
-# Step 1: Load Datasets
+# Set style for plots
+plt.style.use('seaborn-v0_8')
+sns.set_palette("colorblind")
 
-bats = pd.read_csv('dataset1.csv')
-rats = pd.read_csv('dataset2.csv')
+# -------------------------
+# Load Datasets
+# -------------------------
+bats = pd.read_csv(DATASET1_PATH)
+rats = pd.read_csv(DATASET2_PATH)
 
-# Convert time columns
-bats['start_time'] = pd.to_datetime(bats['start_time'], errors='coerce')
-rats['time'] = pd.to_datetime(rats['time'], errors='coerce')
+# Convert time columns safely
+if 'start_time' in bats.columns:
+    bats['start_time'] = pd.to_datetime(bats['start_time'], errors='coerce')
+if 'time' in rats.columns:
+    rats['time'] = pd.to_datetime(rats['time'], errors='coerce')
 
 # Binary column for rat presence
-bats['rat_present'] = bats['seconds_after_rat_arrival'].notnull().astype(int)
+if 'seconds_after_rat_arrival' in bats.columns:
+    bats['rat_present'] = bats['seconds_after_rat_arrival'].notnull().astype(int)
+else:
+    bats['rat_present'] = 0
 
-
-# Step 2: Map months to seasons for rats dataset
-
+# -------------------------
+# Map months to seasons
+# -------------------------
 def month_to_season(month):
-    if month in ['December', 'January', 'February']:
+    if month in ['December','January','February']:
         return 'Winter'
-    elif month in ['March', 'April', 'May']:
+    elif month in ['March','April','May']:
         return 'Spring'
-    elif month in ['June', 'July', 'August']:
+    elif month in ['June','July','August']:
         return 'Summer'
-    elif month in ['September', 'October', 'November']:
+    elif month in ['September','October','November']:
         return 'Autumn'
     else:
         return 'Unknown'
 
-rats['season'] = rats['month'].apply(month_to_season)
+if 'month' in rats.columns:
+    rats['season'] = rats['month'].apply(month_to_season)
+else:
+    rats['season'] = 'Unknown'
 
-
-# Step 3: Seasonal Analysis - Bat Vigilance
-
+# -------------------------
+# Step 1: Seasonal Analysis - Bat Vigilance
+# -------------------------
 plt.figure(figsize=(8,6))
 sns.boxplot(x='season', y='bat_landing_to_food', hue='rat_present', data=bats)
 plt.ylabel('Time to Approach Food (s)')
 plt.title('Seasonal Variation in Bat Vigilance')
-plt.savefig('seasonal_vigilance.png')
-plt.show()
+plt.tight_layout()
+plt.savefig(os.path.join(FIG_DIR,'seasonal_vigilance.png'), dpi=300)
+plt.close()
 
-
-# Step 4: Seasonal Analysis - Bat Risk Behavior
-
+# -------------------------
+# Step 2: Seasonal Analysis - Bat Risk Behavior
+# -------------------------
 plt.figure(figsize=(8,6))
 sns.countplot(x='season', hue='risk', data=bats)
 plt.title('Seasonal Variation in Bat Risk Behavior')
-plt.savefig('seasonal_risk_behavior.png')
-plt.show()
+plt.tight_layout()
+plt.savefig(os.path.join(FIG_DIR,'seasonal_risk_behavior.png'), dpi=300)
+plt.close()
 
-
-# Step 5: Seasonal Analysis - Rat Activity
-
+# -------------------------
+# Step 3: Seasonal Analysis - Rat Activity
+# -------------------------
 plt.figure(figsize=(8,6))
 sns.boxplot(x='season', y='rat_arrival_number', data=rats)
 plt.ylabel('Number of Rat Arrivals per 30 min')
 plt.title('Seasonal Variation in Rat Arrivals')
-plt.savefig('seasonal_rat_arrivals.png')
-plt.show()
+plt.tight_layout()
+plt.savefig(os.path.join(FIG_DIR,'seasonal_rat_arrivals.png'), dpi=300)
+plt.close()
 
 # Bat landings vs rat activity by season
 plt.figure(figsize=(8,6))
@@ -105,17 +128,30 @@ sns.scatterplot(x='rat_arrival_number', y='bat_landing_number', hue='season', da
 plt.xlabel('Number of Rat Arrivals per 30 min')
 plt.ylabel('Number of Bat Landings per 30 min')
 plt.title('Bat Landings vs Rat Activity by Season')
-plt.savefig('bat_vs_rat_activity.png')
-plt.show()
+plt.tight_layout()
+plt.savefig(os.path.join(FIG_DIR,'bat_vs_rat_activity.png'), dpi=300)
+plt.close()
 
-
-# Step 6: Summary Tables
-
-# Mean vigilance by season and rat presence
+# -------------------------
+# Step 4: Summary Tables
+# -------------------------
 summary_vigilance = bats.groupby(['season','rat_present'])['bat_landing_to_food'].mean().reset_index()
 print("\nMean Bat Vigilance by Season and Rat Presence:\n", summary_vigilance)
 
-# Risk behavior percentages by season
 risk_summary = bats.groupby(['season','risk']).size().unstack(fill_value=0)
 risk_summary_percent = risk_summary.div(risk_summary.sum(axis=1), axis=0) * 100
 print("\nRisk Behavior (%) by Season:\n", risk_summary_percent)
+
+# -------------------------
+# Step 5: Existing Analyses (optional ANOVA / interaction)
+# -------------------------
+if 'bat_landing_to_food' in bats.columns:
+    # ANOVA for foraging delay across seasons
+    seasons = ['Winter','Spring','Summer','Autumn']
+    groups = [bats[bats['season']==s]['bat_landing_to_food'].dropna() for s in seasons]
+    if all([len(g)>0 for g in groups]):
+        from scipy.stats import f_oneway
+        f_stat, p_val = f_oneway(*groups)
+        print(f"\nANOVA for foraging delay across seasons: F={f_stat:.3f}, p={p_val:.4f}")
+
+print("\nAll figures saved in folder:", FIG_DIR)
